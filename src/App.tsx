@@ -280,10 +280,9 @@ export default function App() {
   // Jump to today
   const handleJumpToday = () => {
     const today = new Date();
-    const is2026 = currentYear === 2026;
-    const targetYr = 2026;
-    const targetMo = is2026 ? 10 : today.getMonth() + 1;
-    const targetDay = is2026 ? 14 : today.getDate(); // 14 October 2026 (आज का दिन)
+    const targetYr = today.getFullYear();
+    const targetMo = today.getMonth() + 1;
+    const targetDay = today.getDate();
     
     setCurrentYear(targetYr);
     setCurrentMonth(targetMo);
@@ -295,7 +294,7 @@ export default function App() {
     setSelectedPanchang(panchang);
     setSelectedEvent(dayEvents[0] || null);
     setShowDetailModal(true);
-    triggerToast('⭐ आज की पावन तिथि: 14 अक्टूबर 2026 (मां कूष्माण्डा पूजा / विनायक चतुर्थी)');
+    triggerToast(`⭐ आज की पावन तिथि: ${targetDay} ${HINDI_MONTHS[targetMo - 1]?.name || ''} ${targetYr} (${panchang.tithi})`);
   };
 
   return (
@@ -329,7 +328,11 @@ export default function App() {
         onOpenFilter={() => setShowFilterDrawer(true)}
         onOpenAarti={() => setShowAartiModal(true)}
         onOpenChoghadiya={() => {
-          setSelectedPanchang(getAzamgarhPanchang(currentYear, currentMonth, 14));
+          const today = new Date();
+          const targetDay = (currentYear === today.getFullYear() && currentMonth === today.getMonth() + 1)
+            ? today.getDate()
+            : 1;
+          setSelectedPanchang(getAzamgarhPanchang(currentYear, currentMonth, targetDay));
           setShowChoghadiyaModal(true);
         }}
         onOpenScriptures={() => {
@@ -737,7 +740,11 @@ export default function App() {
         viewMode={viewMode}
         onOpenDatePicker={() => setShowDatePickerModal(true)}
         onOpenChoghadiya={() => {
-          setSelectedPanchang(getAzamgarhPanchang(currentYear, currentMonth, 14));
+          const today = new Date();
+          const targetDay = (currentYear === today.getFullYear() && currentMonth === today.getMonth() + 1)
+            ? today.getDate()
+            : 1;
+          setSelectedPanchang(getAzamgarhPanchang(currentYear, currentMonth, targetDay));
           setShowChoghadiyaModal(true);
         }}
         onOpenFilter={() => setShowFilterDrawer(true)}

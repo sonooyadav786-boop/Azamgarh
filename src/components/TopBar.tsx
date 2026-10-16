@@ -96,15 +96,6 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
           )}
 
-          {/* Jump to Today Button */}
-          <button
-            onClick={onJumpToday}
-            className="flex items-center gap-1 px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-red-950 rounded-lg font-black text-xs shadow-2xs border border-amber-300 active:scale-95 transition-all"
-            title="आज की तिथि व पंचांग पर तुरंत जाएं"
-          >
-            <Sun className="w-3.5 h-3.5 text-red-900" />
-            <span>आज</span>
-          </button>
 
           {/* PDF Download */}
           <button

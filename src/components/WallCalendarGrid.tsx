@@ -27,12 +27,14 @@ export const WallCalendarGrid: React.FC<WallCalendarGridProps> = ({
     { name: 'शनि', full: 'शनिवार', isSunday: false },
   ];
 
-  // Detect Today (October 14, 2026 or device date)
+  // Detect Today (device date: single accurate today without duplicate)
   const isToday = (dayNumber: number): boolean => {
     const now = new Date();
-    const isDeviceToday = now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === dayNumber;
-    const is2026Today = year === 2026 && month === 10 && dayNumber === 14;
-    return isDeviceToday || is2026Today;
+    return (
+      now.getFullYear() === year &&
+      now.getMonth() + 1 === month &&
+      now.getDate() === dayNumber
+    );
   };
 
   // Days in month calculation
