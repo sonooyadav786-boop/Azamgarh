@@ -12,6 +12,7 @@ import { WallCalendarGrid } from './components/WallCalendarGrid';
 import { DetailModal } from './components/DetailModal';
 import { DevotionalSection } from './components/DevotionalSection';
 import { AzamgarhHeritageModal } from './components/AzamgarhHeritageModal';
+import { AzamgarhHistoryModal } from './components/AzamgarhHistoryModal';
 import { FilterDrawer } from './components/FilterDrawer';
 import { PdfPrintView } from './components/PdfPrintView';
 import { DatePickerModal } from './components/DatePickerModal';
@@ -79,8 +80,15 @@ export default function App() {
   const [showVoiceSettingsModal, setShowVoiceSettingsModal] = useState<boolean>(false);
   const [showGoogleCalendarModal, setShowGoogleCalendarModal] = useState<boolean>(false);
   const [showMahagranthModal, setShowMahagranthModal] = useState<boolean>(false);
+  const [showAzamgarhHistoryModal, setShowAzamgarhHistoryModal] = useState<boolean>(false);
+  const [azamgarhHistoryInitialTab, setAzamgarhHistoryInitialTab] = useState<'history' | 'heroes' | 'places' | 'facts'>('history');
   
   const [showMasterMenu, setShowMasterMenu] = useState<boolean>(false);
+  
+  const handleOpenAzamgarhHistory = (tab: 'history' | 'heroes' | 'places' | 'facts' = 'history') => {
+    setAzamgarhHistoryInitialTab(tab);
+    setShowAzamgarhHistoryModal(true);
+  };
   
   // Secondary options tabbed hub state (null by default so calendar is visible immediately upon app opening)
   const [activeHubTab, setActiveHubTab] = useState<'panchang' | 'scriptures' | 'sync' | null>(null);
@@ -408,9 +416,40 @@ export default function App() {
         )}
 
         {/* ======================================================== */}
-        {/* 🪔 अन्य सुविधाएं (बाकी ऑप्शन मैनुअली खोलने पे खुलें) */}
-        {/* Secondary options in clean manual expandable drawers */}
+        {/* 🚩 आजमगढ़ का इतिहास व गौरवशाली विरासत (Azamgarh History & Heritage Banner) */}
         {/* ======================================================== */}
+        <div className="bg-gradient-to-r from-red-900 via-amber-900 to-red-950 text-white rounded-2xl p-3.5 sm:p-4.5 shadow-md border-2 border-amber-400/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all hover:border-amber-300">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-amber-400 text-red-950 flex items-center justify-center font-black text-xl shrink-0 shadow-xs border border-amber-300">
+              🚩
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black bg-amber-400 text-red-950 px-2 py-0.2 rounded-full uppercase tracking-wider">
+                  आजमगढ़ गौरव गाथा (UP 50)
+                </span>
+                <span className="text-xs text-amber-200 hidden xs:inline">पूर्वांचल की क्रांति व ऋषि भूमि</span>
+              </div>
+              <h3 className="font-heading text-sm sm:text-base font-black text-amber-100 mt-0.5">
+                आजमगढ़ का सम्पूर्ण इतिहास, अमर वीर व दर्शनीय स्थल
+              </h3>
+              <p className="text-[11px] text-amber-200/90 line-clamp-1">
+                वीर बाबू कुंवर सिंह, 1942 तरवां के अमर बलिदानी, दुर्वासा आश्रम व विश्वप्रसिद्ध ब्लैक पॉटरी
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              onClick={() => handleOpenAzamgarhHistory('history')}
+              className="flex-1 sm:flex-none px-4 py-2 bg-amber-400 hover:bg-amber-300 text-red-950 rounded-xl font-heading font-black text-xs shadow-xs transition-all active:scale-95 text-center flex items-center justify-center gap-1.5"
+            >
+              <span>इतिहास व वीर पढ़ें</span>
+              <span>➔</span>
+            </button>
+          </div>
+        </div>
+
         {/* ======================================================== */}
         {/* 🪔 अन्य धार्मिक सुविधाएं व सेटिंग्स (सुव्यवस्थित केंद्र) */}
         {/* User-friendly tabbed hub: No clutter, opens on user click */}
@@ -756,7 +795,8 @@ export default function App() {
         onOpenKrishnaKatha={() => setShowKrishnaModal(true)}
         onOpenGoogleCalendar={() => setShowGoogleCalendarModal(true)}
         onOpenVoiceSettings={() => setShowVoiceSettingsModal(true)}
-        onOpenHeritage={() => setShowHeritageModal(true)}
+        onOpenHeritage={() => handleOpenAzamgarhHistory('places')}
+        onOpenAzamgarhHistory={handleOpenAzamgarhHistory}
         onOpenPdf={() => setShowPdfModal(true)}
         onOpenMahagranth={() => setShowMahagranthModal(true)}
         syncedCount={Object.keys(syncedEvents).length}
@@ -796,6 +836,13 @@ export default function App() {
       {showHeritageModal && (
         <AzamgarhHeritageModal onClose={() => setShowHeritageModal(false)} />
       )}
+
+      {/* 🚩 आजमगढ़ का सम्पूर्ण इतिहास, अमर वीर व दर्शनीय स्थल Modal */}
+      <AzamgarhHistoryModal
+        isOpen={showAzamgarhHistoryModal}
+        onClose={() => setShowAzamgarhHistoryModal(false)}
+        initialTab={azamgarhHistoryInitialTab}
+      />
 
       {showFilterDrawer && (
         <FilterDrawer

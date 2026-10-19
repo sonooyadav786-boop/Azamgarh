@@ -357,7 +357,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                       <div className="flex items-center gap-2 text-red-900 border-b border-amber-200 pb-2">
                         <span className="text-lg">🪔</span>
                         <h5 className="font-heading font-black text-sm sm:text-base text-red-950 tracking-tight">
-                          यह त्योहार क्यों मनाया जाता है? (कथा व आध्यात्मिक महत्व)
+                          कथा एवं आध्यात्मिक महत्व
                         </h5>
                       </div>
                       <p className="leading-relaxed text-stone-800 text-xs sm:text-sm font-sans whitespace-pre-line text-justify">
@@ -370,7 +370,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                       <div className="flex items-center gap-2 text-orange-950 border-b border-orange-200 pb-2">
                         <span className="text-lg">⏳</span>
                         <h5 className="font-heading font-black text-sm sm:text-base text-orange-950 tracking-tight">
-                          यह त्योहार कब से मनाया जाता है? (इतिहास व पौराणिक काल)
+                          इतिहास व पौराणिक काल
                         </h5>
                       </div>
                       <p className="leading-relaxed text-stone-800 text-xs sm:text-sm font-sans whitespace-pre-line text-justify">

@@ -41,6 +41,7 @@ interface FunctionMenuDrawerProps {
   onOpenGoogleCalendar: () => void;
   onOpenVoiceSettings: () => void;
   onOpenHeritage: () => void;
+  onOpenAzamgarhHistory?: (tab?: 'history' | 'heroes' | 'places' | 'facts') => void;
   onOpenPdf: () => void;
   onOpenMahagranth?: () => void;
   syncedCount?: number;
@@ -65,6 +66,7 @@ export const FunctionMenuDrawer: React.FC<FunctionMenuDrawerProps> = ({
   onOpenGoogleCalendar,
   onOpenVoiceSettings,
   onOpenHeritage,
+  onOpenAzamgarhHistory,
   onOpenPdf,
   onOpenMahagranth,
   syncedCount = 0,
@@ -505,34 +507,104 @@ export const FunctionMenuDrawer: React.FC<FunctionMenuDrawerProps> = ({
 
           {/* Section 5: धार्मिक धरोहर, सेटिंग्स व पीडीएफ */}
           <div>
-            <div className="flex items-center gap-1.5 text-xs font-black text-stone-800 uppercase tracking-wider mb-2 font-serif border-b border-stone-300 pb-1">
-              <span className="text-sm">🏛️</span>
-              <span>धरोहर, सेटिंग्स एवं पीडीएफ</span>
+            <div className="flex items-center justify-between text-xs font-black text-amber-950 uppercase tracking-wider mb-2 font-serif border-b border-amber-900/15 pb-1">
+              <span className="flex items-center gap-1.5">
+                <span className="text-sm">🚩</span>
+                <span>आजमगढ़ इतिहास, वीर व दर्शनीय स्थल</span>
+              </span>
+              <span className="text-[10px] bg-red-800 text-amber-200 px-1.5 py-0.2 rounded font-mono font-bold">
+                UP 50
+              </span>
             </div>
 
             <div className="space-y-2">
-              {/* Heritage */}
+              {/* Azamgarh Full History & Heritage Portal */}
               <button
                 onClick={() => {
-                  onOpenHeritage();
+                  if (onOpenAzamgarhHistory) {
+                    onOpenAzamgarhHistory('history');
+                  } else {
+                    onOpenHeritage();
+                  }
                   onClose();
                 }}
-                className="w-full p-2.5 rounded-xl bg-stone-50 hover:bg-amber-50 border border-stone-200 text-left transition-all shadow-2xs flex items-center justify-between group"
+                className="w-full p-3 rounded-xl bg-gradient-to-r from-red-800 via-amber-800 to-red-900 text-white text-left transition-all shadow-xs flex items-center justify-between group active:scale-98 border border-amber-400/50"
               >
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300">
-                    <MapPin className="w-4 h-4 text-amber-800" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-amber-400 text-red-950 flex items-center justify-center shrink-0 shadow-2xs font-bold text-base">
+                    📜
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-stone-900 block group-hover:text-red-950">
-                      आजमगढ़ पावन तीर्थ व ऋषि धाम
-                    </span>
-                    <span className="text-[10px] text-stone-600 block">
-                      महर्षि दुर्वासा, दत्तात्रेय आश्रम, चंद्रमा धाम व भैरव बाबा
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-amber-100 block font-heading">
+                        आजमगढ़ का सम्पूर्ण इतिहास (History)
+                      </span>
+                      <span className="text-[9px] bg-amber-300 text-red-950 px-1.5 py-0.2 rounded font-bold">
+                        नया पेज
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-200/90 block">
+                      वैदिक काल, 1665 ई० स्थापना, 1857 व 1942 क्रांति का गौरव
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-stone-700" />
+                <ChevronRight className="w-4 h-4 text-amber-300 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Azamgarh Heroes & Freedom Fighters */}
+              <button
+                onClick={() => {
+                  if (onOpenAzamgarhHistory) {
+                    onOpenAzamgarhHistory('heroes');
+                  } else {
+                    onOpenHeritage();
+                  }
+                  onClose();
+                }}
+                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border border-orange-300/80 text-left transition-all shadow-2xs flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <span className="text-sm">⚔️</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-orange-950 block font-heading">
+                      आजमगढ़ के अमर वीर व स्वतंत्रता सेनानी
+                    </span>
+                    <span className="text-[10px] text-stone-600 block">
+                      बाबू कुंवर सिंह, तरवां के अमर बलिदानी, राहुल सांकृत्यायन, कैफ़ी
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-orange-700 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
+              {/* Azamgarh Famous Sacred & Heritage Places */}
+              <button
+                onClick={() => {
+                  if (onOpenAzamgarhHistory) {
+                    onOpenAzamgarhHistory('places');
+                  } else {
+                    onOpenHeritage();
+                  }
+                  onClose();
+                }}
+                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-50 to-stone-50 hover:bg-amber-100 border border-amber-200 text-left transition-all shadow-2xs flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <MapPin className="w-4 h-4 text-amber-100" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-stone-900 block group-hover:text-red-950">
+                      प्रसिद्ध तीर्थ, मंदिर एवं दर्शनीय स्थल
+                    </span>
+                    <span className="text-[10px] text-stone-600 block">
+                      महर्षि दुर्वासा, दत्तात्रेय, भंवरनाथ, पल्हना देवी, ब्लैक पॉटरी
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-amber-700 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
               {/* Voice & App Settings */}
