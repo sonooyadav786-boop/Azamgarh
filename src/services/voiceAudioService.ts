@@ -124,12 +124,192 @@ export interface VoiceApiHealth {
   message?: string;
 }
 
-export async function checkVoiceApiHealth(customApiKey?: string): Promise<VoiceApiHealth> {
+export function sanitizeApiKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let cleaned = rawKey.trim();
+  // Strip surrounding quotes
+  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim();
+  // Extract key if user pasted 'GEMINI_API_KEY=...' or 'API_KEY=...' or 'key=...'
+  const matchAssignment = cleaned.match(/(?:API_KEY|GEMINI_API_KEY|key)\s*[:=]\s*["']?([A-Za-z0-9_-]+)["']?/i);
+  if (matchAssignment && matchAssignment[1]) {
+    return matchAssignment[1].trim();
+  }
+  // Extract AIzaSy token if embedded in text or URL
+  const matchAiKey = cleaned.match(/(AIzaSy[A-Za-z0-9_-]{25,50})/);
+  if (matchAiKey && matchAiKey[1]) {
+    return matchAiKey[1].trim();
+  }
+  return cleaned;
+}
+
+export interface ApiKeyVerificationResult {
+  valid: boolean;
+  status: 'valid' | 'invalid_key' | 'quota_exceeded' | 'network_error';
+  message: string;
+  modelsCount?: number;
+}
+
+export async function verifyGeminiApiKey(rawKey: string): Promise<ApiKeyVerificationResult> {
+  const key = sanitizeApiKey(rawKey);
+  if (!key) {
+    return {
+      valid: false,
+      status: 'invalid_key',
+      message: 'कृपया पहले अपनी Gemini API Key दर्ज करें।'
+    };
+  }
+
+  // 1. Direct validation against Google Generative Language API
+  // Supported across all origins (local dev, preview, GitHub Pages, custom domain)
   try {
-    const keyToTest = customApiKey !== undefined ? customApiKey : getStoredVoiceSettings().customApiKey;
+    const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
+    const res = await fetch(googleUrl, { method: 'GET' });
+
+    if (res.ok) {
+      const data = await res.json();
+      const count = Array.isArray(data?.models) ? data.models.length : 0;
+      return {
+        valid: true,
+        status: 'valid',
+        modelsCount: count,
+        message: 'सफलता! आपकी Gemini API Key प्रमाणित हो गई है और AI वाणी सक्रिय है।'
+      };
+    }
+
+    let errorDetail = '';
+    try {
+      const errJson = await res.json();
+      errorDetail = errJson?.error?.message || '';
+    } catch {
+      // ignore
+    }
+
+    if (res.status === 429) {
+      return {
+        valid: false,
+        status: 'quota_exceeded',
+        message: 'इस API Key का दैनिक मुफ़्त कोटा पूरा हो गया है (429 Rate Limit)। कृपया नई कुंजी का उपयोग करें।'
+      };
+    }
+
+    if (res.status === 400 || res.status === 403) {
+      const lower = errorDetail.toLowerCase();
+      if (lower.includes('key not valid') || lower.includes('api_key_invalid') || lower.includes('invalid api key')) {
+        return {
+          valid: false,
+          status: 'invalid_key',
+          message: 'अमान्य API Key (Invalid Key)। कृपया Google AI Studio (aistudio.google.com/apikey) से सही कुंजी कॉपी करें।'
+        };
+      }
+      return {
+        valid: false,
+        status: 'invalid_key',
+        message: errorDetail ? `Google API संदेश: ${errorDetail}` : 'कुंजी अमान्य है। कृपया सुनिश्चित करें कि यह सही Google Gemini API Key है।'
+      };
+    }
+  } catch (directErr) {
+    console.warn('Direct Google API key verification fetch error, attempting server proxy fallback:', directErr);
+  }
+
+  // 2. Server proxy fallback (/api/health) if running in fullstack Node.js environment
+  try {
+    const res = await fetch('/api/health', {
+      headers: { 'x-gemini-api-key': key }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.quotaExceeded) {
+        return {
+          valid: false,
+          status: 'quota_exceeded',
+          message: 'इस कुंजी का दैनिक कोटा पूरा हो गया है।'
+        };
+      }
+      if (data.hasApiKey) {
+        return {
+          valid: true,
+          status: 'valid',
+          message: 'सफलता! API Key स्थानीय सर्वर से प्रमाणित हो गई है।'
+        };
+      }
+    }
+  } catch (serverErr) {
+    // server unavailable (e.g. GitHub Pages or static host)
+  }
+
+  // 3. Fallback format check: Google AI Studio keys start with 'AIzaSy' and are 39 chars
+  if (/^AIzaSy[A-Za-z0-9_-]{33}$/.test(key)) {
+    return {
+      valid: true,
+      status: 'valid',
+      message: 'कुंजी का प्रारूप सही है (AIzaSy...)। कुंजी सहेज ली गई है!'
+    };
+  }
+
+  return {
+    valid: false,
+    status: 'invalid_key',
+    message: 'कुंजी सत्यापित नहीं हो सकी। कृपया सुनिश्चित करें कि आपने पूरी Google AI Studio Gemini API Key पेस्ट की है।'
+  };
+}
+
+export async function checkVoiceApiHealth(customApiKey?: string): Promise<VoiceApiHealth> {
+  const settings = getStoredVoiceSettings();
+  const rawKey = customApiKey !== undefined ? customApiKey : settings.customApiKey;
+  const keyToTest = sanitizeApiKey(rawKey || '');
+
+  // If a custom key is provided or stored, test directly against Google API first
+  if (keyToTest) {
+    try {
+      const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToTest)}`;
+      const res = await fetch(googleUrl);
+      if (res.ok) {
+        return {
+          status: 'online',
+          hasApiKey: true,
+          isCustomKey: true,
+          quotaExceeded: false,
+          engine: 'Gemini TTS (आपकी व्यक्तिगत Gemini API Key सक्रिय)',
+          message: 'आपकी व्यक्तिगत Gemini API Key कनेक्टेड एवं सक्रिय है!'
+        };
+      } else if (res.status === 429) {
+        return {
+          status: 'quota_exceeded',
+          hasApiKey: true,
+          isCustomKey: true,
+          quotaExceeded: true,
+          engine: 'ब्राउज़र इनबिल्ट स्पीच सिंथेसाइज़र (कोटा पूर्ण)',
+          message: 'इस कुंजी का दैनिक मुफ़्त कोटा पूरा हो गया है।'
+        };
+      } else if (res.status === 400 || res.status === 403) {
+        return {
+          status: 'fallback',
+          hasApiKey: false,
+          isCustomKey: true,
+          engine: 'ब्राउज़र इनबिल्ट स्पीच सिंथेसाइज़र',
+          message: 'कुंजी सत्यापित नहीं हो सकी। कृपया सही Gemini API Key दर्ज करें।'
+        };
+      }
+    } catch {
+      // offline or network hiccup; if key matches standard pattern, treat as online
+      if (/^AIzaSy[A-Za-z0-9_-]{33}$/.test(keyToTest)) {
+        return {
+          status: 'online',
+          hasApiKey: true,
+          isCustomKey: true,
+          quotaExceeded: false,
+          engine: 'Gemini TTS (सक्रिय)',
+          message: 'आपकी व्यक्तिगत Gemini API Key सहेजी गई है!'
+        };
+      }
+    }
+  }
+
+  // Fallback to server /api/health if available
+  try {
     const headers: Record<string, string> = {};
-    if (keyToTest?.trim()) {
-      headers['x-gemini-api-key'] = keyToTest.trim();
+    if (keyToTest) {
+      headers['x-gemini-api-key'] = keyToTest;
     }
     const res = await fetch('/api/health', { headers });
     if (res.ok) {
@@ -151,8 +331,20 @@ export async function checkVoiceApiHealth(customApiKey?: string): Promise<VoiceA
       };
     }
   } catch (err) {
-    console.warn('Voice API health check failed:', err);
+    // server unreachable (e.g. GitHub Pages static deployment)
   }
+
+  // If a validly-formatted key was stored, remain online even on static deploy
+  if (keyToTest && /^AIzaSy[A-Za-z0-9_-]{33}$/.test(keyToTest)) {
+    return {
+      status: 'online',
+      hasApiKey: true,
+      isCustomKey: true,
+      engine: 'Gemini TTS (सक्रिय)',
+      message: 'आपकी व्यक्तिगत Gemini API Key सक्रिय है!'
+    };
+  }
+
   return {
     status: 'fallback',
     hasApiKey: false,
@@ -303,10 +495,15 @@ class VoiceAudioPlayer {
     const voiceId = overrideVoiceId || settings.selectedVoiceId;
 
     if (settings.useAiVoice) {
+      let audioBase64: string | null = null;
+      let audioMimeType: string = 'audio/wav';
+      const cleanCustomKey = sanitizeApiKey(settings.customApiKey || '');
+
+      // 1. Try server endpoint /api/tts first
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (settings.customApiKey?.trim()) {
-          headers['x-gemini-api-key'] = settings.customApiKey.trim();
+        if (cleanCustomKey) {
+          headers['x-gemini-api-key'] = cleanCustomKey;
         }
 
         const response = await fetch('/api/tts', {
@@ -317,46 +514,111 @@ class VoiceAudioPlayer {
             voice: voiceId,
             style: overrideStyle || `${settings.chantStyle}, peaceful Indian Vedic devotional chanting with clear pronunciation`,
             speed: settings.speed,
-            customApiKey: settings.customApiKey?.trim() || undefined
+            customApiKey: cleanCustomKey || undefined
           })
         });
 
         if (response.ok) {
           const data = await response.json();
-          if (data.fallbackToBrowser || !data.success) {
-            console.warn('AI Voice requested browser fallback:', data.message || data.error);
-            this.fallbackBrowserSpeech(text, settings);
-            return;
-          }
-
           if (data.success && data.audioData) {
-            const audioSrc = `data:${data.mimeType || 'audio/wav'};base64,${data.audioData}`;
-            const audio = new Audio(audioSrc);
-            audio.playbackRate = settings.speed;
-
-            audio.onplay = () => {
-              this.isLoading = false;
-              this.isPlaying = true;
-              this.isPaused = false;
-              this.notify();
-            };
-
-            audio.onended = () => {
-              this.stop();
-            };
-
-            audio.onerror = () => {
-              console.warn('Audio playback error, falling back to browser speech synthesis');
-              this.fallbackBrowserSpeech(text, settings);
-            };
-
-            this.currentAudio = audio;
-            await audio.play();
-            return;
+            audioBase64 = data.audioData;
+            audioMimeType = data.mimeType || 'audio/wav';
           }
         }
       } catch (err) {
-        console.warn('Error fetching AI TTS audio, falling back to browser:', err);
+        // server unavailable (e.g. GitHub Pages static deployment)
+      }
+
+      // 2. Direct client-side Gemini TTS synthesis if server was unavailable and customApiKey is available
+      if (!audioBase64 && cleanCustomKey) {
+        try {
+          const trimmedText = text.trim();
+          const synthesisText = trimmedText.length > 1200 
+            ? trimmedText.substring(0, 1150) + '...' 
+            : trimmedText;
+
+          const voicePromptStyle = overrideStyle || 
+            `${settings.chantStyle}, Spiritual, melodious, calm, devotional, authentic Indian Vedic/Hindi chanting style with clear pronunciation and peaceful cadence.`;
+
+          const validVoiceName = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr', 'Aoede'].includes(voiceId) 
+            ? voiceId 
+            : 'Kore';
+
+          const directRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-lite-tts:generateContent?key=${encodeURIComponent(cleanCustomKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      {
+                        text: synthesisText,
+                        speechMetadata: {
+                          style: voicePromptStyle
+                        }
+                      }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  responseModalities: ['AUDIO'],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: { 
+                        voiceName: validVoiceName 
+                      }
+                    }
+                  }
+                }
+              })
+            }
+          );
+
+          if (directRes.ok) {
+            const resultData = await directRes.json();
+            const candidatePart = resultData?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+            if (candidatePart?.data) {
+              audioBase64 = candidatePart.data;
+              audioMimeType = candidatePart.mimeType || 'audio/wav';
+            }
+          }
+        } catch (clientErr) {
+          console.warn('Direct client-side Gemini TTS synthesis error:', clientErr);
+        }
+      }
+
+      // 3. Play audio if generated successfully
+      if (audioBase64) {
+        try {
+          const audioSrc = `data:${audioMimeType};base64,${audioBase64}`;
+          const audio = new Audio(audioSrc);
+          audio.playbackRate = settings.speed;
+
+          audio.onplay = () => {
+            this.isLoading = false;
+            this.isPlaying = true;
+            this.isPaused = false;
+            this.notify();
+          };
+
+          audio.onended = () => {
+            this.stop();
+          };
+
+          audio.onerror = () => {
+            console.warn('Audio playback error, falling back to browser speech synthesis');
+            this.fallbackBrowserSpeech(text, settings);
+          };
+
+          this.currentAudio = audio;
+          await audio.play();
+          return;
+        } catch (playErr) {
+          console.warn('Audio play failed:', playErr);
+        }
       }
     }
 

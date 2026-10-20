@@ -83,6 +83,22 @@ export const DEVOTIONAL_VOICE_MODELS = [
   }
 ];
 
+// Helper to clean quotes, whitespace, or accidental prefix assignments from manual API keys
+function sanitizeApiKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let cleaned = rawKey.trim();
+  cleaned = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim();
+  const matchAssignment = cleaned.match(/(?:API_KEY|GEMINI_API_KEY|key)\s*[:=]\s*["']?([A-Za-z0-9_-]+)["']?/i);
+  if (matchAssignment && matchAssignment[1]) {
+    return matchAssignment[1].trim();
+  }
+  const matchAiKey = cleaned.match(/(AIzaSy[A-Za-z0-9_-]{25,50})/);
+  if (matchAiKey && matchAiKey[1]) {
+    return matchAiKey[1].trim();
+  }
+  return cleaned;
+}
+
 // Track quota exhaustion state to prevent spamming Google Gemini API when 429 is reached
 let quotaExceededUntil = 0;
 
@@ -92,7 +108,7 @@ function isQuotaExceeded(): boolean {
 
 // GET /api/health - Voice API status and health check
 app.get('/api/health', (req: Request, res: Response) => {
-  const customKey = (req.headers['x-gemini-api-key'] as string)?.trim();
+  const customKey = sanitizeApiKey((req.headers['x-gemini-api-key'] as string) || '');
   const effectiveKey = customKey || process.env.GEMINI_API_KEY;
   const isCustom = Boolean(customKey);
   const quotaHit = !isCustom && isQuotaExceeded();
@@ -114,7 +130,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // GET /api/voices - List all available realistic voice models
 app.get('/api/voices', (req: Request, res: Response) => {
-  const customKey = (req.headers['x-gemini-api-key'] as string)?.trim();
+  const customKey = sanitizeApiKey((req.headers['x-gemini-api-key'] as string) || '');
   const effectiveKey = customKey || process.env.GEMINI_API_KEY;
   const isCustom = Boolean(customKey);
 
@@ -158,7 +174,7 @@ app.post('/api/tts', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check for user-provided manual key or system key
-    const customKey = ((req.headers['x-gemini-api-key'] as string) || customApiKey || '')?.trim();
+    const customKey = sanitizeApiKey(((req.headers['x-gemini-api-key'] as string) || customApiKey || ''));
     const apiKey = customKey || process.env.GEMINI_API_KEY;
 
     // If using system key and system quota was already hit, fallback to browser voice immediately

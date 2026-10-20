@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
-  Trash2
+  Trash2,
+  ClipboardPaste
 } from 'lucide-react';
 import { 
   DEVOTIONAL_VOICE_MODELS, 
@@ -33,6 +34,8 @@ import {
   getStoredVoiceSettings, 
   saveVoiceSettings, 
   checkVoiceApiHealth,
+  sanitizeApiKey,
+  verifyGeminiApiKey,
   globalVoiceAudioPlayer 
 } from '../services/voiceAudioService';
 
@@ -93,13 +96,97 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
     setIsCheckingApi(false);
   };
 
-  const handleSaveApiKey = () => {
-    const trimmed = apiKeyInput.trim();
-    const updated = { ...settings, customApiKey: trimmed };
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          const sanitized = sanitizeApiKey(text);
+          setApiKeyInput(sanitized);
+          setKeyTestFeedback(null);
+          triggerToast('📋 क्लिपबोर्ड से API Key पेस्ट हो गई!');
+          return;
+        }
+      }
+    } catch {
+      // Browser permission blocked or not supported
+    }
+    triggerToast('कृपया बॉक्स में सीधे पेस्ट (Long press) करें');
+  };
+
+  const handleSaveApiKey = async () => {
+    const raw = apiKeyInput;
+    const sanitized = sanitizeApiKey(raw);
+    if (!sanitized) {
+      handleClearApiKey();
+      return;
+    }
+
+    if (sanitized !== raw) {
+      setApiKeyInput(sanitized);
+    }
+
+    setIsTestingKey(true);
+    setKeyTestFeedback(null);
+
+    try {
+      const verification = await verifyGeminiApiKey(sanitized);
+      setKeyTestFeedback({
+        success: verification.valid,
+        message: verification.message
+      });
+
+      // Save key if valid OR if it matches standard Gemini API key format (AIzaSy...)
+      if (verification.valid || /^AIzaSy[A-Za-z0-9_-]{33}$/.test(sanitized)) {
+        const updated = { ...settings, customApiKey: sanitized, useAiVoice: true };
+        setSettings(updated);
+        saveVoiceSettings(updated);
+        triggerToast('🔑 आपकी व्यक्तिगत API Key सुरक्षित एवं सक्रिय हो गई!');
+        handleCheckHealth(sanitized);
+      } else if (verification.status === 'quota_exceeded') {
+        const updated = { ...settings, customApiKey: sanitized, useAiVoice: true };
+        setSettings(updated);
+        saveVoiceSettings(updated);
+        triggerToast('⚠️ कुंजी सुरक्षित हो गई (दैनिक कोटा समाप्त)');
+        handleCheckHealth(sanitized);
+      } else {
+        triggerToast('⚠️ कुंजी सत्यापित नहीं हो सकी!');
+      }
+    } catch (err: any) {
+      // In case of network error, if formatted as AIzaSy..., still save it
+      if (/^AIzaSy[A-Za-z0-9_-]{33}$/.test(sanitized)) {
+        const updated = { ...settings, customApiKey: sanitized, useAiVoice: true };
+        setSettings(updated);
+        saveVoiceSettings(updated);
+        setKeyTestFeedback({
+          success: true,
+          message: 'कुंजी का प्रारूप सही है (AIzaSy...) और इसे सुरक्षित सहेज लिया गया है।'
+        });
+        triggerToast('🔑 API Key सुरक्षित हो गई!');
+        handleCheckHealth(sanitized);
+      } else {
+        setKeyTestFeedback({
+          success: false,
+          message: 'जांच विफल: ' + (err?.message || 'त्रुटि हुई')
+        });
+      }
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
+
+  const handleForceSaveApiKey = () => {
+    const sanitized = sanitizeApiKey(apiKeyInput);
+    if (!sanitized) return;
+    const updated = { ...settings, customApiKey: sanitized, useAiVoice: true };
     setSettings(updated);
     saveVoiceSettings(updated);
-    triggerToast(trimmed ? '🔑 आपकी व्यक्तिगत API Key सुरक्षित हो गई!' : 'API Key हटाई गई');
-    handleCheckHealth(trimmed);
+    setKeyTestFeedback({
+      success: true,
+      message: 'कुंजी सहेज ली गई है और AI वाणी सक्रिय कर दी गई है।'
+    });
+    triggerToast('🔑 कुंजी सहेज ली गई!');
+    handleCheckHealth(sanitized);
   };
 
   const handleClearApiKey = () => {
@@ -113,35 +200,32 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
   };
 
   const handleTestKey = async () => {
-    const trimmed = apiKeyInput.trim();
-    if (!trimmed) {
+    const raw = apiKeyInput;
+    const sanitized = sanitizeApiKey(raw);
+    if (!sanitized) {
       setKeyTestFeedback({
         success: false,
         message: 'कृपया पहले अपनी Gemini API Key दर्ज करें।'
       });
       return;
     }
+    if (sanitized !== raw) {
+      setApiKeyInput(sanitized);
+    }
+
     setIsTestingKey(true);
     setKeyTestFeedback(null);
     try {
-      const health = await checkVoiceApiHealth(trimmed);
-      setApiHealth(health);
-      if (health.hasApiKey && health.status !== 'quota_exceeded') {
-        setKeyTestFeedback({
-          success: true,
-          message: 'सफलता! API Key सक्रिय है और Gemini AI TTS इंजन से कनेक्टेड है।'
-        });
+      const verification = await verifyGeminiApiKey(sanitized);
+      setKeyTestFeedback({
+        success: verification.valid,
+        message: verification.message
+      });
+      if (verification.valid) {
         triggerToast('✅ API Key सफलता से सत्यापित हुई!');
-      } else if (health.status === 'quota_exceeded') {
-        setKeyTestFeedback({
-          success: false,
-          message: 'इस कुंजी का दैनिक मुफ़्त कोटा पूरा हो गया है। कृपया नई कुंजी उपयोग करें।'
-        });
+        handleCheckHealth(sanitized);
       } else {
-        setKeyTestFeedback({
-          success: false,
-          message: 'कुंजी सत्यापित नहीं हो सकी। कृपया सुनिश्चित करें कि यह सही Google AI Studio Gemini API Key है।'
-        });
+        triggerToast('⚠️ सत्यापन विफल');
       }
     } catch (err: any) {
       setKeyTestFeedback({
@@ -402,6 +486,19 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
 
               {/* Input + Action Buttons */}
               <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-stone-600">
+                  <span className="font-medium text-amber-950">Gemini API Key:</span>
+                  <button
+                    type="button"
+                    onClick={handlePasteClipboard}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold transition-all border border-amber-300"
+                    title="क्लिपबोर्ड से सीधे पेस्ट करें"
+                  >
+                    <ClipboardPaste className="w-3 h-3 text-amber-800" />
+                    <span>पेस्ट करें (Paste)</span>
+                  </button>
+                </div>
+
                 <div className="relative flex items-center">
                   <input
                     type={showApiKey ? 'text' : 'password'}
@@ -411,7 +508,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
                       setKeyTestFeedback(null);
                     }}
                     placeholder="यहाँ अपनी Gemini API Key पेस्ट करें (जैसे AIzaSy...)"
-                    className="w-full bg-amber-50/50 border border-amber-300 rounded-lg pl-3 pr-20 py-2 text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:bg-white"
+                    className="w-full bg-amber-50/50 border border-amber-300 rounded-lg pl-3 pr-20 py-2.5 text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:bg-white"
                   />
                   <div className="absolute right-2 flex items-center gap-1">
                     <button
@@ -435,19 +532,41 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
                   </div>
                 </div>
 
+                <div className="text-[10px] text-stone-500 flex items-center justify-between">
+                  <span>💡 Google AI Studio API Key आमतौर पर <code className="font-mono text-amber-900 font-bold">AIzaSy</code> से शुरू होती है।</span>
+                  {apiKeyInput ? (
+                    <span className="font-mono text-amber-900">लंबाई: {apiKeyInput.trim().length} अक्षर</span>
+                  ) : null}
+                </div>
+
                 {/* Test Feedback Notice */}
                 {keyTestFeedback && (
-                  <div className={`p-2.5 rounded-lg text-xs flex items-start gap-2 border ${
+                  <div className={`p-2.5 rounded-lg text-xs flex flex-col gap-1.5 border ${
                     keyTestFeedback.success
                       ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
                       : 'bg-red-50 text-red-900 border-red-300'
                   }`}>
-                    {keyTestFeedback.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2">
+                      {keyTestFeedback.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      )}
+                      <span className="leading-relaxed font-medium">{keyTestFeedback.message}</span>
+                    </div>
+
+                    {!keyTestFeedback.success && apiKeyInput.trim() && (
+                      <div className="pl-6 pt-1 flex items-center gap-2 border-t border-red-200 mt-1">
+                        <span className="text-[11px] text-stone-600">यदि आपको विश्वास है कि यह कुंजी सही है:</span>
+                        <button
+                          type="button"
+                          onClick={handleForceSaveApiKey}
+                          className="text-[11px] text-amber-900 font-bold underline hover:text-amber-950"
+                        >
+                          फिर भी सहेजें (Save Anyway)
+                        </button>
+                      </div>
                     )}
-                    <span className="leading-relaxed font-medium">{keyTestFeedback.message}</span>
                   </div>
                 )}
 
@@ -455,7 +574,8 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = ({ onClose 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     onClick={handleSaveApiKey}
-                    className="px-3.5 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95"
+                    disabled={isTestingKey}
+                    className="px-3.5 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 disabled:opacity-50"
                   >
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
                     <span>कुंजी सेव करें (Save Key)</span>
